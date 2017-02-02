@@ -85,12 +85,8 @@ class Game:
         moves = []
         for pos in self.positions[player]:
             moves.extend(self.check_neighboring_moves(pos[0], pos[1], player))
+        moves = sorted(moves)
         print moves
-        """
-        for i in range(len(self.board)):
-            for j in range(len(self.board[i])):
-                if self.initial_board[]
-        """
 
 
 class Node:
