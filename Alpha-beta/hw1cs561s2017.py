@@ -208,6 +208,7 @@ def check_infinity(val):
 def alpha_beta(game, player, player_start, depth, max_depth, alpha, beta):
     logs = []
     value = max_value(game, player, player_start, depth, max_depth, alpha, beta, "root", logs)
+
     for log in logs:
         print log
     return value
@@ -215,10 +216,13 @@ def alpha_beta(game, player, player_start, depth, max_depth, alpha, beta):
 
 def max_value(game, player, player_start, depth, max_depth, alpha, beta, node, logs):
     if max_depth - depth == 0 or len(game.get_positions()[player]) == 0:
-        return game.evaluate_value()
+        value = game.evaluate_value()
+        logs.append(
+            [get_pretty_node(node), depth, check_infinity(value), check_infinity(alpha), check_infinity(beta)])
+        return value
     value = -999999
     moves = game.generate_moves(player)
-    print moves
+    # print moves
     logs.append([get_pretty_node(node), depth, check_infinity(value), check_infinity(alpha), check_infinity(beta)])
     if len(moves) == 0:
         if node != "pass":
@@ -229,16 +233,25 @@ def max_value(game, player, player_start, depth, max_depth, alpha, beta, node, l
                 player = "X"
             value = max(value,
                         min_value(new_game, player, player_start, depth + 1, max_depth, alpha, beta, "pass", logs))
+            if value >= beta:
+                logs.append([get_pretty_node(node), depth, check_infinity(value), check_infinity(alpha), check_infinity(beta)])
+                return value
+            alpha = max(alpha, value)
+            logs.append([get_pretty_node(node), depth, check_infinity(value), check_infinity(alpha), check_infinity(beta)])
+    original_player = deepcopy(player)
+    if player == "X":
+        player = "O"
+    else:
+        player = "X"
     for move in moves:
-        new_game = Game(player, player_start, depth, move=move, game=game)
-        if player == "X":
-            player = "O"
-        else:
-            player = "X"
+        new_game = Game(original_player, player_start, depth, move=move, game=game)
         value = max(value, min_value(new_game, player, player_start, depth + 1, max_depth, alpha, beta, move, logs))
+        """
         logs.append(
             [get_pretty_node(move), depth + 1, check_infinity(value), check_infinity(alpha), check_infinity(beta)])
+        """
         if value >= beta:
+            logs.append([get_pretty_node(node), depth, check_infinity(value), check_infinity(alpha), check_infinity(beta)])
             return value
         alpha = max(alpha, value)
         logs.append([get_pretty_node(node), depth, check_infinity(value), check_infinity(alpha), check_infinity(beta)])
@@ -249,12 +262,13 @@ def max_value(game, player, player_start, depth, max_depth, alpha, beta, node, l
 
 def min_value(game, player, player_start, depth, max_depth, alpha, beta, node, logs):
     if max_depth - depth == 0 or len(game.get_positions()[player]) == 0:
-        print game.get_board()
-        exit(0)
-        return game.evaluate_value()
+        value = game.evaluate_value()
+        logs.append(
+            [get_pretty_node(node), depth, check_infinity(value), check_infinity(alpha), check_infinity(beta)])
+        return value
     value = 999999
     moves = game.generate_moves(player)
-    print moves
+    # print moves
     logs.append([get_pretty_node(node), depth, check_infinity(value), check_infinity(alpha), check_infinity(beta)])
     if len(moves) == 0:
         if node != "pass":
@@ -265,16 +279,25 @@ def min_value(game, player, player_start, depth, max_depth, alpha, beta, node, l
                 player = "X"
             value = max(value,
                         min_value(new_game, player, player_start, depth + 1, max_depth, alpha, beta, "pass", logs))
+            if value <= alpha:
+                logs.append([get_pretty_node(node), depth, check_infinity(value), check_infinity(alpha), check_infinity(beta)])
+                return value
+            beta = min(beta, value)
+            logs.append([get_pretty_node(node), depth, check_infinity(value), check_infinity(alpha), check_infinity(beta)])
+    original_player = deepcopy(player)
+    if player == "X":
+        player = "O"
+    else:
+        player = "X"
     for move in moves:
-        new_game = Game(player, player_start, depth, move=move, game=game)
-        if player == "X":
-            player = "O"
-        else:
-            player = "X"
+        new_game = Game(original_player, player_start, depth, move=move, game=game)
         value = min(value, max_value(new_game, player, player_start, depth + 1, max_depth, alpha, beta, move, logs))
+        """
         logs.append(
             [get_pretty_node(move), depth + 1, check_infinity(value), check_infinity(alpha), check_infinity(beta)])
+        """
         if value <= alpha:
+            logs.append([get_pretty_node(node), depth, check_infinity(value), check_infinity(alpha), check_infinity(beta)])
             return value
         beta = min(beta, value)
         logs.append([get_pretty_node(node), depth, check_infinity(value), check_infinity(alpha), check_infinity(beta)])
