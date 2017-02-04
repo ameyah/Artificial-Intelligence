@@ -1,4 +1,5 @@
 import argparse
+from copy import deepcopy
 
 __author__ = 'ameya'
 
@@ -12,23 +13,29 @@ class Game:
     def __init__(self, player, player_start, max_depth, game_state=None, **kwargs):
         self.player = player
         self.player_start = player_start
-        self.max_depth = max_depth
         self.board = []
         self.positions = {"X": [], "O": []}
         if "root" in kwargs:
             self.save_board(game_state)
+            self.max_depth = max_depth
         else:
-            self.board = kwargs['game'].get_board()
-            self.positions = kwargs['game'].get_positions()
-            self.update_board(kwargs['move'])  # update X position and board
-            # self.start_game()
-            # self.generate_moves(player_start)
+            self.board = deepcopy(kwargs['game'].get_board())
+            self.positions = deepcopy(kwargs['game'].get_positions())
+            self.max_depth = deepcopy(kwargs['game'].get_depth())
+            if "move" in kwargs:
+                self.update_board(kwargs['move'])  # update X position and board
+                # print self.board
+                # self.start_game()
+                # self.generate_moves(player_start)
 
     def get_board(self):
         return self.board
 
     def get_positions(self):
         return self.positions
+
+    def get_depth(self):
+        return self.max_depth
 
     def save_board(self, game_state):
         for i in range(len(game_state)):
@@ -43,16 +50,46 @@ class Game:
             self.board.append(row)
 
     def update_board(self, move):
-        if self.player == "X":
+        global neighboring_pos
+        if self.player == "O":
+            # first update enclosing positions
+            affected_pos = []
+            for direction in neighboring_pos:
+                affected_pos.extend(self.get_affected_pos(move, direction, check_player="O"))
+
+            for pos in affected_pos:
+                self.board[pos[0]][pos[1]] = "O"
+                self.positions["X"].remove((pos[0], pos[1]))
+                self.positions["O"].append((pos[0], pos[1]))
             # move is O's move
             self.board[move[0]][move[1]] = "O"
             self.positions["O"].append((move[0], move[1]))
         else:
             # first update enclosing positions
-            
+            affected_pos = []
+            for direction in neighboring_pos:
+                affected_pos.extend(self.get_affected_pos(move, direction, check_player="X"))
+
+            for pos in affected_pos:
+                self.board[pos[0]][pos[1]] = "X"
+                self.positions["O"].remove((pos[0], pos[1]))
+                self.positions["X"].append((pos[0], pos[1]))
             # move is X's move
             self.board[move[0]][move[1]] = "X"
             self.positions["X"].append((move[0], move[1]))
+
+    def get_affected_pos(self, move, direction, check_player):
+        flip_positions = []
+        while self.board[move[0]][move[1]] != check_player:
+            move = [move[0] + direction[0], move[1] + direction[1]]
+            i = move[0]
+            j = move[1]
+            if i < 0 or i > 7 or j < 0 or j > 7:
+                return []
+            if self.board[i][j] is None:
+                return []
+            flip_positions.append(move)
+        return flip_positions[:-1]
 
     def get_valid_move(self, i, j, player, direction, found):
         if i < 0 or i > 7 or j < 0 or j > 7:
@@ -153,48 +190,94 @@ class Node:
         self.beta = 999999
 
 
-def alpha_beta(game, player, player_start, depth, alpha, beta):
-    value = max_value(game, player, player_start, depth, alpha, beta)
+def get_pretty_node(node):
+    if isinstance(node, list):
+        display_node = chr(node[1] + 97) + str(node[0] + 1)
+        return display_node
+    return node
+
+
+def check_infinity(val):
+    if val == -999999:
+        return "-Infinity"
+    if val == 999999:
+        return "Infinity"
+    return val
+
+
+def alpha_beta(game, player, player_start, depth, max_depth, alpha, beta):
+    logs = []
+    value = max_value(game, player, player_start, depth, max_depth, alpha, beta, "root", logs)
+    for log in logs:
+        print log
     return value
 
 
-def max_value(game, player, player_start, depth, alpha, beta):
-    if depth == 0:
+def max_value(game, player, player_start, depth, max_depth, alpha, beta, node, logs):
+    if max_depth - depth == 0 or len(game.get_positions()[player]) == 0:
         return game.evaluate_value()
     value = -999999
     moves = game.generate_moves(player)
     print moves
+    logs.append([get_pretty_node(node), depth, check_infinity(value), check_infinity(alpha), check_infinity(beta)])
+    if len(moves) == 0:
+        if node != "pass":
+            new_game = Game(player, player_start, depth, game=game)
+            if player == "X":
+                player = "O"
+            else:
+                player = "X"
+            value = max(value,
+                        min_value(new_game, player, player_start, depth + 1, max_depth, alpha, beta, "pass", logs))
     for move in moves:
-        # update game
+        new_game = Game(player, player_start, depth, move=move, game=game)
         if player == "X":
             player = "O"
         else:
             player = "X"
-        new_game = Game(player, player_start, depth - 1, move=move, game=game)
-        value = max(value, min_value(new_game, player, player_start, depth - 1, alpha, beta))
+        value = max(value, min_value(new_game, player, player_start, depth + 1, max_depth, alpha, beta, move, logs))
+        logs.append(
+            [get_pretty_node(move), depth + 1, check_infinity(value), check_infinity(alpha), check_infinity(beta)])
         if value >= beta:
             return value
         alpha = max(alpha, value)
+        logs.append([get_pretty_node(node), depth, check_infinity(value), check_infinity(alpha), check_infinity(beta)])
+    if node == "root" and value == -999999:
+        logs[-1][2] = game.evaluate_value()
     return value
 
 
-def min_value(game, player, player_start, depth, alpha, beta):
-    if depth == 0:
+def min_value(game, player, player_start, depth, max_depth, alpha, beta, node, logs):
+    if max_depth - depth == 0 or len(game.get_positions()[player]) == 0:
+        print game.get_board()
+        exit(0)
         return game.evaluate_value()
     value = 999999
     moves = game.generate_moves(player)
     print moves
+    logs.append([get_pretty_node(node), depth, check_infinity(value), check_infinity(alpha), check_infinity(beta)])
+    if len(moves) == 0:
+        if node != "pass":
+            new_game = Game(player, player_start, depth, game=game)
+            if player == "X":
+                player = "O"
+            else:
+                player = "X"
+            value = max(value,
+                        min_value(new_game, player, player_start, depth + 1, max_depth, alpha, beta, "pass", logs))
     for move in moves:
-        # update game
+        new_game = Game(player, player_start, depth, move=move, game=game)
         if player == "X":
             player = "O"
         else:
             player = "X"
-        new_game = Game(player, player_start, depth - 1, move=move, game=game)
-        value = min(value, max_value(new_game, player, player_start, depth - 1, alpha, beta))
+        value = min(value, max_value(new_game, player, player_start, depth + 1, max_depth, alpha, beta, move, logs))
+        logs.append(
+            [get_pretty_node(move), depth + 1, check_infinity(value), check_infinity(alpha), check_infinity(beta)])
         if value <= alpha:
             return value
         beta = min(beta, value)
+        logs.append([get_pretty_node(node), depth, check_infinity(value), check_infinity(alpha), check_infinity(beta)])
     return value
 
 
@@ -212,4 +295,4 @@ if __name__ == '__main__':
         lines = file_handler.readlines()
     lines = [line.strip() for line in lines]
     reversi_game = Game(lines[0], lines[0], int(lines[1]), lines[2: len(lines)], root=True)
-    alpha_beta(reversi_game, lines[0], lines[0], int(lines[1]), -999999, 999999)
+    alpha_beta(reversi_game, lines[0], lines[0], 0, int(lines[1]), -999999, 999999)
