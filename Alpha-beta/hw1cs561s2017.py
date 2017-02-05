@@ -210,7 +210,7 @@ def check_infinity(val):
 
 def alpha_beta(game, player, player_start, depth, max_depth, alpha, beta):
     logs = []
-    value = max_value(game, player, player_start, depth, max_depth, alpha, beta, "root", logs)
+    value = max_value(game, player, player_start, depth, max_depth, alpha, beta, "root", logs, pcount=0)
     if value[2] != "pass" and value[2] is not None:
         game.update_board(value[2])
     output_file(game.get_board(), logs)
@@ -222,8 +222,8 @@ def alpha_beta(game, player, player_start, depth, max_depth, alpha, beta):
     return value
 
 
-def max_value(game, player, player_start, depth, max_depth, alpha, beta, node, logs):
-    if max_depth - depth == 0 or len(game.get_positions()[player]) == 0:
+def max_value(game, player, player_start, depth, max_depth, alpha, beta, node, logs, **kwargs):
+    if max_depth - depth == 0:  # or len(game.get_positions()[player]) == 0:
         value = game.evaluate_value()
         logs.append(
             [get_pretty_node(node), str(depth), check_infinity(value), check_infinity(alpha), check_infinity(beta)])
@@ -232,28 +232,36 @@ def max_value(game, player, player_start, depth, max_depth, alpha, beta, node, l
     final_move = None
     moves = game.generate_moves(player)
     # print moves
+    if "pcount" in kwargs:
+        if kwargs['pcount'] == 2:
+            value = [game.evaluate_value(), None]
     logs.append([get_pretty_node(node), str(depth), check_infinity(value[0]), check_infinity(alpha), check_infinity(beta)])
     if len(moves) == 0:
-        if node != "pass":
-            if node == "root":
-                final_move = "pass"
-            new_game = Game(player, player_start, depth, game=game)
-            if player == "X":
-                player = "O"
-            else:
-                player = "X"
-            new_value = min_value(new_game, player, player_start, depth + 1, max_depth, alpha, beta, "pass", logs)
-            if value[0] < new_value[0]:
-                value[0] = new_value[0]
-                value[1] = new_value[1]
-            if value[0] >= beta:
+        if "pcount" in kwargs:
+            if kwargs['pcount'] < 2:
+                if node == "root":
+                    final_move = "pass"
+                new_game = Game(player, player_start, depth, game=game)
+                if player == "X":
+                    player = "O"
+                else:
+                    player = "X"
+                if "pcount" in kwargs:
+                    pcount = kwargs['pcount'] + 1
+                else:
+                    pcount = 1
+                new_value = min_value(new_game, player, player_start, depth + 1, max_depth, alpha, beta, "pass", logs, pcount=pcount)
+                if value[0] < new_value[0]:
+                    value[0] = new_value[0]
+                    value[1] = new_value[1]
+                if value[0] >= beta:
+                    logs.append(
+                        [get_pretty_node(node), str(depth), check_infinity(value[0]), check_infinity(alpha), check_infinity(beta)])
+                    value.extend([final_move])
+                    return value
+                alpha = max(alpha, value[0])
                 logs.append(
                     [get_pretty_node(node), str(depth), check_infinity(value[0]), check_infinity(alpha), check_infinity(beta)])
-                value.extend([final_move])
-                return value
-            alpha = max(alpha, value[0])
-            logs.append(
-                [get_pretty_node(node), str(depth), check_infinity(value[0]), check_infinity(alpha), check_infinity(beta)])
     original_player = deepcopy(player)
     if player == "X":
         player = "O"
@@ -261,7 +269,7 @@ def max_value(game, player, player_start, depth, max_depth, alpha, beta, node, l
         player = "X"
     for move in moves:
         new_game = Game(original_player, player_start, depth, move=move, game=game)
-        new_value = min_value(new_game, player, player_start, depth + 1, max_depth, alpha, beta, move, logs)
+        new_value = min_value(new_game, player, player_start, depth + 1, max_depth, alpha, beta, move, logs, pcount=0)
         if value[0] < new_value[0]:
             value[0] = new_value[0]
             value[1] = new_value[1]
@@ -284,8 +292,8 @@ def max_value(game, player, player_start, depth, max_depth, alpha, beta, node, l
     return value
 
 
-def min_value(game, player, player_start, depth, max_depth, alpha, beta, node, logs):
-    if max_depth - depth == 0 or len(game.get_positions()[player]) == 0:
+def min_value(game, player, player_start, depth, max_depth, alpha, beta, node, logs, **kwargs):
+    if max_depth - depth == 0:  # or len(game.get_positions()[player]) == 0:
         value = game.evaluate_value()
         logs.append(
             [get_pretty_node(node), str(depth), check_infinity(value), check_infinity(alpha), check_infinity(beta)])
@@ -293,25 +301,34 @@ def min_value(game, player, player_start, depth, max_depth, alpha, beta, node, l
     value = [999999, None]
     moves = game.generate_moves(player)
     # print moves
+    if "pcount" in kwargs:
+        if kwargs['pcount'] == 2:
+            value = [game.evaluate_value(), None]
     logs.append([get_pretty_node(node), str(depth), check_infinity(value[0]), check_infinity(alpha), check_infinity(beta)])
     if len(moves) == 0:
-        if node != "pass":
-            new_game = Game(player, player_start, depth, game=game)
-            if player == "X":
-                player = "O"
-            else:
-                player = "X"
-            new_value = max_value(new_game, player, player_start, depth + 1, max_depth, alpha, beta, "pass", logs)
-            if value[0] > new_value[0]:
-                value[0] = new_value[0]
-                value[1] = new_value[1]
-            if value[0] <= alpha:
+        if "pcount" in kwargs:
+            if kwargs['pcount'] < 2:
+                new_game = Game(player, player_start, depth, game=game)
+                if player == "X":
+                    player = "O"
+                else:
+                    player = "X"
+                # logs.append(["pass", str(depth), check_infinity(value[0]), check_infinity(alpha), check_infinity(beta)])
+                if "pcount" in kwargs:
+                    pcount = kwargs['pcount'] + 1
+                else:
+                    pcount = 1
+                new_value = max_value(new_game, player, player_start, depth + 1, max_depth, alpha, beta, "pass", logs, pcount=pcount)
+                if value[0] > new_value[0]:
+                    value[0] = new_value[0]
+                    value[1] = new_value[1]
+                if value[0] <= alpha:
+                    logs.append(
+                        [get_pretty_node(node), str(depth), check_infinity(value[0]), check_infinity(alpha), check_infinity(beta)])
+                    return value
+                beta = min(beta, value[0])
                 logs.append(
                     [get_pretty_node(node), str(depth), check_infinity(value[0]), check_infinity(alpha), check_infinity(beta)])
-                return value
-            beta = min(beta, value[0])
-            logs.append(
-                [get_pretty_node(node), str(depth), check_infinity(value[0]), check_infinity(alpha), check_infinity(beta)])
     original_player = deepcopy(player)
     if player == "X":
         player = "O"
@@ -319,7 +336,7 @@ def min_value(game, player, player_start, depth, max_depth, alpha, beta, node, l
         player = "X"
     for move in moves:
         new_game = Game(original_player, player_start, depth, move=move, game=game)
-        new_value = max_value(new_game, player, player_start, depth + 1, max_depth, alpha, beta, move, logs)
+        new_value = max_value(new_game, player, player_start, depth + 1, max_depth, alpha, beta, move, logs, pcount=0)
         if value[0] > new_value[0]:
             value[0] = new_value[0]
             value[1] = new_value[1]
