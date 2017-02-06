@@ -168,7 +168,10 @@ class Game:
     def generate_moves(self, player):
         moves = []
         for pos in self.positions[player]:
-            moves.extend(self.check_neighboring_moves(pos[0], pos[1], player))
+            single_move = self.check_neighboring_moves(pos[0], pos[1], player)
+            for move in single_move:
+                if move not in moves:
+                    moves.append(move)
         moves = sorted(moves)
         return moves
 
@@ -211,8 +214,9 @@ def check_infinity(val):
 def alpha_beta(game, player, player_start, depth, max_depth, alpha, beta):
     logs = []
     value = max_value(game, player, player_start, depth, max_depth, alpha, beta, "root", logs, pcount=0)
-    if value[2] != "pass" and value[2] is not None:
-        game.update_board(value[2])
+    if len(value) > 2:
+        if value[2] != "pass" and value[2] is not None:
+            game.update_board(value[2])
     output_file(game.get_board(), logs)
     """
     print value
@@ -223,7 +227,7 @@ def alpha_beta(game, player, player_start, depth, max_depth, alpha, beta):
 
 
 def max_value(game, player, player_start, depth, max_depth, alpha, beta, node, logs, **kwargs):
-    if max_depth - depth == 0:  # or len(game.get_positions()[player]) == 0:
+    if max_depth - depth <= 0:  # or len(game.get_positions()[player]) == 0:
         value = game.evaluate_value()
         logs.append(
             [get_pretty_node(node), str(depth), check_infinity(value), check_infinity(alpha), check_infinity(beta)])
@@ -293,7 +297,7 @@ def max_value(game, player, player_start, depth, max_depth, alpha, beta, node, l
 
 
 def min_value(game, player, player_start, depth, max_depth, alpha, beta, node, logs, **kwargs):
-    if max_depth - depth == 0:  # or len(game.get_positions()[player]) == 0:
+    if max_depth - depth <= 0:  # or len(game.get_positions()[player]) == 0:
         value = game.evaluate_value()
         logs.append(
             [get_pretty_node(node), str(depth), check_infinity(value), check_infinity(alpha), check_infinity(beta)])
