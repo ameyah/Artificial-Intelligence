@@ -1,4 +1,3 @@
-import argparse
 from copy import deepcopy
 
 __author__ = 'ameya'
@@ -24,9 +23,6 @@ class Game:
             self.max_depth = deepcopy(kwargs['game'].get_depth())
             if "move" in kwargs:
                 self.update_board(kwargs['move'])  # update X position and board
-                # print self.board
-                # self.start_game()
-                # self.generate_moves(player_start)
 
     def get_board(self):
         return self.board
@@ -149,22 +145,6 @@ class Game:
             moves.append(top_left)
         return moves
 
-    def start_game(self):
-        current_player = self.player_start
-        all_moves = []
-        if current_player == "X":
-            players = ["X", "O"]
-        else:
-            players = ["O", "X"]
-        moves = self.generate_moves(players[0])
-        for move in moves:
-            players = players[::-1]
-            g = Game(players[0], self.max_depth - 1, self.board, root=False, move=move)
-        for i in range(1, self.max_depth):
-            all_moves.append(self.generate_moves(players[0]))
-            players = players[::-1]
-            self.update_board()
-
     def generate_moves(self, player):
         moves = []
         for pos in self.positions[player]:
@@ -187,13 +167,6 @@ class Game:
             for pos in self.positions["X"]:
                 score -= board_value[pos[0]][pos[1]]
         return score
-
-
-class Node:
-    def __init__(self, depth):
-        self.depth = depth
-        self.alpha = -999999
-        self.beta = 999999
 
 
 def get_pretty_node(node):
@@ -373,15 +346,7 @@ def output_file(board, logs):
             file_handler.write("\n" + result_row)
 
 
-def get_command_args():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("-i", "--input", help='Input file of Initial game state')
-    args = parser.parse_args()
-    return args
-
-
 if __name__ == '__main__':
-    # args = get_command_args()
     lines = []
     with open("input.txt", "r") as file_handler:
         lines = file_handler.readlines()
