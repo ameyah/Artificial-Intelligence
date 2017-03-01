@@ -8,6 +8,7 @@ class Resolution:
         self.people = int(people)
         self.tables = int(tables)
         self.friends = []
+        self.related_people = {}
         self.enemies = []
         self.active_people = set()
         self.clauses = set()
@@ -16,14 +17,41 @@ class Resolution:
     def get_friends_enemies(self, input_data):
         for data in input_data:
             formatted_data = data.split(" ")
-            d1 = formatted_data[0]
-            d2 = formatted_data[1]
-            self.active_people.add(int(d1))
-            self.active_people.add(int(d2))
+            d1 = int(formatted_data[0])
+            d2 = int(formatted_data[1])
+            self.active_people.add(d1)
+            self.active_people.add(d2)
             if formatted_data[2] == "F":
                 self.friends.append([d1, d2])
             elif formatted_data[2] == "E":
                 self.enemies.append([d1, d2])
+        self.friends = sorted(self.friends)
+        self.enemies = sorted(self.enemies)
+        self.generate_related_people()
+
+    def generate_related_people(self):
+        for enemy_pair in self.enemies:
+            self.related_people[enemy_pair[0]] = enemy_pair[0]
+            self.related_people[enemy_pair[1]] = enemy_pair[1]
+        for friend_pair in self.friends:
+            if friend_pair[0] in self.related_people:
+                if friend_pair[1] in self.related_people:
+                    friend_value = self.related_people[friend_pair[1]]
+                    for person in self.related_people:
+                        if self.related_people[person] == friend_value:
+                            self.related_people[person] = self.related_people[friend_pair[0]]
+                self.related_people[friend_pair[1]] = self.related_people[friend_pair[0]]
+            elif friend_pair[1] in self.related_people:
+                if friend_pair[0] in self.related_people:
+                    friend_value = self.related_people[friend_pair[0]]
+                    for person in self.related_people:
+                        if self.related_people[person] == friend_value:
+                            self.related_people[person] = self.related_people[friend_pair[1]]
+                self.related_people[friend_pair[0]] = self.related_people[friend_pair[1]]
+            else:
+                self.related_people[friend_pair[0]] = friend_pair[0]
+                self.related_people[friend_pair[1]] = friend_pair[0]
+        print self.related_people
 
     def generate_cnf(self):
         # (Rule 1) CNF for all people
@@ -65,7 +93,8 @@ class Resolution:
             for table in xrange(1, self.tables + 1):
                 self.clauses.add(tuple(sorted((~int(str(enemy[0]) + str(table)), ~int(str(enemy[1]) + str(table))))))
 
-        print self.clauses
+        print len(self.clauses)
+        print len(self.unwanted_clauses)
 
     def pl_resolution(self):
         while True:
