@@ -9,13 +9,17 @@ class Resolution:
         self.tables = int(tables)
         self.friends = []
         self.enemies = []
+        self.active_people = set()
         self.clauses = set()
+        self.unwanted_clauses = set()
 
     def get_friends_enemies(self, input_data):
         for data in input_data:
             formatted_data = data.split(" ")
             d1 = formatted_data[0]
             d2 = formatted_data[1]
+            self.active_people.add(int(d1))
+            self.active_people.add(int(d2))
             if formatted_data[2] == "F":
                 self.friends.append([d1, d2])
             elif formatted_data[2] == "E":
@@ -31,11 +35,17 @@ class Resolution:
                 for tablej in range(table + 1, self.tables + 1):
                     unique_clauses_b.append((~int(str(person) + str(table)), ~int(str(person) + str(tablej)),))
             clauses_a = tuple(sorted(clauses_a))
-            self.clauses.add(clauses_a)
+            if person in self.active_people:
+                self.clauses.add(clauses_a)
+            else:
+                self.unwanted_clauses.add(clauses_a)
             clauses_b = tuple(unique_clauses_b)
             if len(clauses_b) > 0:
                 for clause in clauses_b:
-                    self.clauses.add(tuple(sorted(clause)))
+                    if person in self.active_people:
+                        self.clauses.add(tuple(sorted(clause)))
+                    else:
+                        self.unwanted_clauses.add(tuple(sorted(clause)))
 
         # (Rule 2) CNF for friends
         """
@@ -183,7 +193,8 @@ if __name__ == '__main__':
     r = Resolution(people, tables)
     r.get_friends_enemies(lines[1:])
     r.generate_cnf()
-    # result = r.pl_resolution()
+    result = r.pl_resolution()
+    """
     seating = r.walksat()
     keys = seating.keys()
     for key in keys:
@@ -193,3 +204,4 @@ if __name__ == '__main__':
     for key in keys:
         if seating[key]:
             print str(key) + " : " + str(seating[key])
+    """
