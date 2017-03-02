@@ -1,5 +1,4 @@
 import random
-from copy import deepcopy
 
 __author__ = 'ameya'
 
@@ -73,7 +72,6 @@ class Resolution:
 
         # Use aggregated data as per unique persons
         unique_people = list(self.unique_table_values.iterkeys())
-        combined_sets = {}
         skip_sets = []
         for i in xrange(len(unique_people) - 1):
             if i in skip_sets:
@@ -89,20 +87,16 @@ class Resolution:
                     [self.unique_table_values[unique_people[i]].append(item) for item in
                      self.unique_table_values[unique_people[j]]]
                     del self.unique_table_values[unique_people[j]]
-                    if unique_people[i] in combined_sets:
-                        combined_sets[unique_people[i]].append(unique_people[j])
-                    else:
-                        combined_sets[unique_people[i]] = [unique_people[j]]
 
     def generate_cnf(self):
         # (Rule 1) CNF for all people
-        unique_people = list(self.unique_table_values)
+        unique_people = list(self.active_people)
         for person in unique_people:
             clauses_a = []
             unique_clauses_b = []
-            for table in xrange(1, self.tables + 1):
+            for table in xrange(1, len(self.unique_table_values) + 1):
                 clauses_a.append(int(str(person) + str(table)))  # appending tuples because we need to add it to set
-                for tablej in range(table + 1, self.tables + 1):
+                for tablej in range(table + 1, len(self.unique_table_values) + 1):
                     unique_clauses_b.append((~int(str(person) + str(table)), ~int(str(person) + str(tablej)),))
             clauses_a = tuple(sorted(clauses_a))
             if person in self.active_people:
@@ -136,7 +130,7 @@ class Resolution:
 
         # (Rule 3) CNF for enemies
         for enemy in self.enemies:
-            for table in xrange(1, self.tables + 1):
+            for table in xrange(1, len(self.unique_table_values) + 1):
                 self.clauses.add(tuple(sorted((~int(str(self.related_people[enemy[0]]) + str(table)),
                                                ~int(str(self.related_people[enemy[1]]) + str(table))))))
 
