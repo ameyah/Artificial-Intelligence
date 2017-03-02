@@ -1,4 +1,5 @@
 import random
+from copy import deepcopy
 
 __author__ = 'ameya'
 
@@ -9,7 +10,7 @@ class Resolution:
         self.tables = int(tables)
         self.friends = []
         self.related_people = {}
-        self.unique_table_values = set()
+        self.unique_table_values = {}
         self.enemies = []
         self.active_people = set()
         self.clauses = set()
@@ -23,9 +24,9 @@ class Resolution:
             self.active_people.add(d1)
             self.active_people.add(d2)
             if formatted_data[2] == "F":
-                self.friends.append([d1, d2])
+                self.friends.append(sorted([d1, d2]))
             elif formatted_data[2] == "E":
-                self.enemies.append([d1, d2])
+                self.enemies.append(sorted([d1, d2]))
         self.friends = sorted(self.friends)
         self.enemies = sorted(self.enemies)
         self.generate_related_people()
@@ -53,8 +54,45 @@ class Resolution:
                 self.related_people[friend_pair[0]] = friend_pair[0]
                 self.related_people[friend_pair[1]] = friend_pair[0]
         print self.related_people
+
         for key in self.related_people:
-            self.unique_table_values.add(self.related_people[key])
+            if self.related_people[key] in self.unique_table_values:
+                self.unique_table_values[self.related_people[key]].append(key)
+            else:
+                self.unique_table_values[self.related_people[key]] = [key]
+        print self.unique_table_values
+        self.combine_list()
+
+    def combine_list(self):
+        def can_combine(x, y):
+            for inner_i in x:
+                for inner_j in y:
+                    if sorted([inner_i, inner_j]) in self.enemies:
+                        return False
+            return True
+
+        # Use aggregated data as per unique persons
+        unique_people = list(self.unique_table_values.iterkeys())
+        combined_sets = {}
+        skip_sets = []
+        for i in xrange(len(unique_people) - 1):
+            if i in skip_sets:
+                continue
+            for j in xrange(i + 1, len(unique_people)):
+                try:
+                    if_combine = can_combine(self.unique_table_values[unique_people[i]],
+                                             self.unique_table_values[unique_people[j]])
+                except KeyError as e:
+                    continue
+                if if_combine:
+                    skip_sets.append(j)
+                    [self.unique_table_values[unique_people[i]].append(item) for item in
+                     self.unique_table_values[unique_people[j]]]
+                    del self.unique_table_values[unique_people[j]]
+                    if unique_people[i] in combined_sets:
+                        combined_sets[unique_people[i]].append(unique_people[j])
+                    else:
+                        combined_sets[unique_people[i]] = [unique_people[j]]
 
     def generate_cnf(self):
         # (Rule 1) CNF for all people
@@ -62,9 +100,9 @@ class Resolution:
         for person in unique_people:
             clauses_a = []
             unique_clauses_b = []
-            for table in xrange(1, len(self.unique_table_values) + 1):
+            for table in xrange(1, self.tables + 1):
                 clauses_a.append(int(str(person) + str(table)))  # appending tuples because we need to add it to set
-                for tablej in range(table + 1, len(self.unique_table_values) + 1):
+                for tablej in range(table + 1, self.tables + 1):
                     unique_clauses_b.append((~int(str(person) + str(table)), ~int(str(person) + str(tablej)),))
             clauses_a = tuple(sorted(clauses_a))
             if person in self.active_people:
@@ -89,18 +127,20 @@ class Resolution:
         """
         """
         for friend in self.friends:
-            for table in xrange(1, self.tables + 1):
-                self.clauses.add(tuple(sorted((~int(str(friend[0]) + str(table)), int(str(friend[1]) + str(table))))))
-                self.clauses.add(tuple(sorted((int(str(friend[0]) + str(table)), ~int(str(friend[1]) + str(table))))))
+            for table in xrange(1, len(self.unique_table_values) + 1):
+                self.clauses.add(tuple(sorted((~int(str(self.related_people[friend[0]]) + str(table)),
+                                               int(str(self.related_people[friend[1]]) + str(table))))))
+                self.clauses.add(tuple(sorted((int(str(self.related_people[friend[0]]) + str(table)),
+                                               ~int(str(self.related_people[friend[1]]) + str(table))))))
         """
 
         # (Rule 3) CNF for enemies
         for enemy in self.enemies:
-            for table in xrange(1, len(self.unique_table_values) + 1):
+            for table in xrange(1, self.tables + 1):
                 self.clauses.add(tuple(sorted((~int(str(self.related_people[enemy[0]]) + str(table)),
                                                ~int(str(self.related_people[enemy[1]]) + str(table))))))
 
-        print len(self.clauses)
+        print self.clauses
         print len(self.unwanted_clauses)
 
     def pl_resolution(self):
@@ -230,6 +270,7 @@ if __name__ == '__main__':
     r.get_friends_enemies(lines[1:])
     r.generate_cnf()
     result = r.pl_resolution()
+    print result
     """
     seating = r.walksat()
     keys = seating.keys()
