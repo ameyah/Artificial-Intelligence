@@ -9,6 +9,7 @@ class Resolution:
         self.tables = int(tables)
         self.friends = []
         self.related_people = {}
+        self.unique_table_values = set()
         self.enemies = []
         self.active_people = set()
         self.clauses = set()
@@ -52,15 +53,18 @@ class Resolution:
                 self.related_people[friend_pair[0]] = friend_pair[0]
                 self.related_people[friend_pair[1]] = friend_pair[0]
         print self.related_people
+        for key in self.related_people:
+            self.unique_table_values.add(self.related_people[key])
 
     def generate_cnf(self):
         # (Rule 1) CNF for all people
-        for person in xrange(1, self.people + 1):
+        unique_people = list(self.unique_table_values)
+        for person in unique_people:
             clauses_a = []
             unique_clauses_b = []
-            for table in xrange(1, self.tables + 1):
+            for table in xrange(1, len(self.unique_table_values) + 1):
                 clauses_a.append(int(str(person) + str(table)))  # appending tuples because we need to add it to set
-                for tablej in range(table + 1, self.tables + 1):
+                for tablej in range(table + 1, len(self.unique_table_values) + 1):
                     unique_clauses_b.append((~int(str(person) + str(table)), ~int(str(person) + str(tablej)),))
             clauses_a = tuple(sorted(clauses_a))
             if person in self.active_people:
@@ -83,15 +87,18 @@ class Resolution:
                     if tablei != tablej:
                         self.clauses.add((~int(str(friend[0]) + str(tablei)), ~int(str(friend[1]) + str(tablej))))
         """
+        """
         for friend in self.friends:
             for table in xrange(1, self.tables + 1):
                 self.clauses.add(tuple(sorted((~int(str(friend[0]) + str(table)), int(str(friend[1]) + str(table))))))
                 self.clauses.add(tuple(sorted((int(str(friend[0]) + str(table)), ~int(str(friend[1]) + str(table))))))
+        """
 
         # (Rule 3) CNF for enemies
         for enemy in self.enemies:
-            for table in xrange(1, self.tables + 1):
-                self.clauses.add(tuple(sorted((~int(str(enemy[0]) + str(table)), ~int(str(enemy[1]) + str(table))))))
+            for table in xrange(1, len(self.unique_table_values) + 1):
+                self.clauses.add(tuple(sorted((~int(str(self.related_people[enemy[0]]) + str(table)),
+                                               ~int(str(self.related_people[enemy[1]]) + str(table))))))
 
         print len(self.clauses)
         print len(self.unwanted_clauses)
