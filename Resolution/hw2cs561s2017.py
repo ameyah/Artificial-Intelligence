@@ -52,14 +52,12 @@ class Resolution:
             else:
                 self.related_people[friend_pair[0]] = friend_pair[0]
                 self.related_people[friend_pair[1]] = friend_pair[0]
-        print self.related_people
 
         for key in self.related_people:
             if self.related_people[key] in self.unique_table_values:
                 self.unique_table_values[self.related_people[key]].append(key)
             else:
                 self.unique_table_values[self.related_people[key]] = [key]
-        print self.unique_table_values
         self.combine_list()
 
     def combine_list(self):
@@ -91,7 +89,7 @@ class Resolution:
     def generate_cnf(self):
         # (Rule 1) CNF for all people
         unique_people = list(self.active_people)
-        for person in unique_people:
+        for person in self.unique_table_values.iterkeys():
             clauses_a = []
             unique_clauses_b = []
             for table in xrange(1, len(self.unique_table_values) + 1):
@@ -129,10 +127,17 @@ class Resolution:
         """
 
         # (Rule 3) CNF for enemies
-        for enemy in self.enemies:
+        new_enemies = []
+        print self.unique_table_values
+        print self.clauses
+        unique_tables = list(self.unique_table_values.iterkeys())
+        for i in xrange(len(unique_tables) - 1):
+            for j in xrange(i + 1, len(unique_tables)):
+                new_enemies.append([unique_tables[i], unique_tables[j]])
+        for enemy in new_enemies:
             for table in xrange(1, len(self.unique_table_values) + 1):
-                self.clauses.add(tuple(sorted((~int(str(self.related_people[enemy[0]]) + str(table)),
-                                               ~int(str(self.related_people[enemy[1]]) + str(table))))))
+                self.clauses.add(tuple(sorted((~int(str(enemy[0]) + str(table)),
+                                               ~int(str(enemy[1]) + str(table))))))
 
         print self.clauses
         print len(self.unwanted_clauses)
