@@ -11,15 +11,16 @@ class Resolution:
         self.friends = []
         self.enemies = []
         self.clauses = []
+        self.person_separator = 1000
 
     def get_friends_enemies(self, input_data):
         for data in input_data:
             formatted_data = data.split(" ")
-            d1 = formatted_data[0]
-            d2 = formatted_data[1]
-            if formatted_data[2] == "F":
+            d1 = int(formatted_data[0])
+            d2 = int(formatted_data[1])
+            if formatted_data[2].lower() == "f":
                 self.friends.append([d1, d2])
-            elif formatted_data[2] == "E":
+            elif formatted_data[2].lower() == "e":
                 self.enemies.append([d1, d2])
 
     def generate_cnf(self):
@@ -28,15 +29,12 @@ class Resolution:
             clauses_a = []
             unique_clauses_b = []
             for table in xrange(1, self.tables + 1):
-                clauses_a.append(int(str(person) + str(table)))  # appending tuples because we need to add it to set
+                clauses_a.append(
+                    (person * self.person_separator) + table)  # appending tuples because we need to add it to set
                 for tablej in range(table + 1, self.tables + 1):
-                    unique_clauses_b.append((~int(str(person) + str(table)), ~int(str(person) + str(tablej)),))
-            clauses_a = sorted(clauses_a)
+                    self.clauses.append([~((person * self.person_separator) + table),
+                                         ~((person * self.person_separator) + tablej)])
             self.clauses.append(clauses_a)
-            clauses_b = unique_clauses_b
-            if len(clauses_b) > 0:
-                for clause in clauses_b:
-                    self.clauses.append(sorted(clause))
 
         # (Rule 2) CNF for friends
         """
@@ -48,15 +46,16 @@ class Resolution:
         """
         for friend in self.friends:
             for table in xrange(1, self.tables + 1):
-                self.clauses.append(sorted((~int(str(friend[0]) + str(table)), int(str(friend[1]) + str(table)))))
-                self.clauses.append(sorted((int(str(friend[0]) + str(table)), ~int(str(friend[1]) + str(table)))))
+                self.clauses.append([~((friend[0] * self.person_separator) + table),
+                                     ((friend[1] * self.person_separator) + table)])
+                self.clauses.append([((friend[0] * self.person_separator) + table),
+                                     ~((friend[1] * self.person_separator) + table)])
 
         # (Rule 3) CNF for enemies
         for enemy in self.enemies:
             for table in xrange(1, self.tables + 1):
-                self.clauses.append(sorted((~int(str(enemy[0]) + str(table)), ~int(str(enemy[1]) + str(table)))))
-
-        # print self.clauses
+                self.clauses.append(
+                    [~((enemy[0] * self.person_separator) + table), ~((enemy[1] * self.person_separator) + table)])
 
     def pl_resolution(self):
         while True:
@@ -99,26 +98,6 @@ class Resolution:
                         clauses.add((tuple(sorted(unique))))
         return clauses
 
-        """
-        clauses = set()
-        for i in xrange(len(ci)):
-            for j in xrange(len(cj)):
-                if ci[i] == ~cj[j]:
-                    # TODO: Need to add try except?
-                    ci_value = list(ci[0: i] + ci[i + 1: len(ci)])
-                    cj_value = list(cj[0: j] + cj[j + 1: len(cj)])
-                    combined_ci_cj = ci_value + cj_value
-                    if len(combined_ci_cj) == 0:
-                        return False
-                    unique = []
-                    [unique.append(item) for item in combined_ci_cj if item not in unique]
-                    clauses.add(tuple(sorted(unique)))
-                    # TODO: check the below condition
-                    # elif ci_value != ~cj_value:
-                    #     clauses.add((ci_value, cj_value))
-        return clauses
-        """
-
     @staticmethod
     def get_walksat_model(clauses):
         symbols = {}
@@ -137,15 +116,10 @@ class Resolution:
         return symbols
 
     @staticmethod
-    def check_satisfiability(clause, model, empty_symbol_check=False):
+    def check_satisfiability(clause, model, empty_symbol_check):
         for symbol in clause:
             if symbol in model:
                 if model[symbol]:
-                    return True
-                else:
-                    continue
-            elif ~symbol in model:
-                if not model[~symbol]:
                     return True
                 else:
                     continue
@@ -154,44 +128,52 @@ class Resolution:
                     return None
         return False
 
-    def get_pure_symbol(self, symbols, clauses, model):
+    @staticmethod
+    def get_pure_symbol(clauses, model):
         new_clauses = deepcopy(clauses)
-        """
-        for symbol in model:
-            if model[symbol]:
-                self.unit_clause_rule_remove(new_clauses, symbol)
-            else:
-                self.unit_clause_rule_remove(new_clauses, ~symbol)
-        """
-        for symbol in symbols:
-            pos_found = False
-            neg_found = False
-            for clause in new_clauses:
-                if symbol in clause:
-                    pos_found = True
-                if ~symbol in clause:
-                    neg_found = True
-            if (pos_found and not neg_found) or (neg_found and not pos_found):
-                if symbol > 0:
-                    return symbol, True
+        possible_pure_symbols = set()
+        temp_pure_symbols_remove_all = set()
+        for clause in new_clauses:
+            temp_pure_symbols_add = set()
+            temp_pure_symbols_remove = set()
+            for literal in clause:
+                if literal in model:
+                    if model[literal]:
+                        temp_pure_symbols_add = set()
+                        temp_pure_symbols_remove = set()
+                        break
+                elif ~literal in model:
+                    if not model[~literal]:
+                        temp_pure_symbols_add = set()
+                        temp_pure_symbols_remove = set()
+                        break
                 else:
-                    return symbol, False
-        return False, False
+                    if ~literal not in possible_pure_symbols:
+                        temp_pure_symbols_add.add(literal)
+                    else:
+                        temp_pure_symbols_remove.add(~literal)
+            possible_pure_symbols = possible_pure_symbols.union(temp_pure_symbols_add)
+            temp_pure_symbols_remove_all = temp_pure_symbols_remove_all.union(temp_pure_symbols_remove)
+        for literal in temp_pure_symbols_remove_all:
+            possible_pure_symbols.remove(literal)
+        try:
+            pure_symbols_positive = set()
+            pure_symbols_negative = set()
+            for literal in possible_pure_symbols:
+                if literal > 0:
+                    pure_symbols_positive.add(literal)
+                else:
+                    pure_symbols_negative.add(literal)
+            if len(pure_symbols_positive) > 0:
+                return list(pure_symbols_positive)
+            else:
+                return list(pure_symbols_negative)
+                # return list(possible_pure_symbols)
+        except:
+            return []
 
     @staticmethod
-    def pure_symbol_rule_remove(clauses, p):
-        clauses_remove = []
-        for i in xrange(len(clauses)):
-            for j in xrange(len(clauses[i])):
-                if clauses[i][j] == p:
-                    clauses_remove.append(i)
-                    break
-        for i in sorted(clauses_remove, reverse=True):
-            del clauses[i]
-
-    def get_unit_clause(self, clauses, model):
-        """
-        unit_clauses = []
+    def get_unit_clause(clauses, model):
         for clause in clauses:
             count_unknown = 0
             unit_clause = None
@@ -212,25 +194,8 @@ class Resolution:
                         break
             if count_unknown == 1:
                 if not true_flag:
-                    unit_clauses.append(unit_clause)
-        return unit_clauses
-        """
-        new_clauses = deepcopy(clauses)
-        unit_clauses = []
-        """
-        for symbol in model:
-            if model[symbol]:
-                self.unit_clause_rule_remove(new_clauses, symbol)
-            else:
-                self.unit_clause_rule_remove(new_clauses, ~symbol)
-        """
-        for clause in new_clauses:
-            if len(clause) == 1:
-                if clause[0] > 0:
-                    return [[clause[0], True]]
-                else:
-                    return [[clause[0], False]]
-        return []
+                    return unit_clause
+        return False
 
     @staticmethod
     def unit_clause_rule_remove(clauses, p):
@@ -250,27 +215,24 @@ class Resolution:
             del clauses[i]
 
     def run_dpll(self):
-        model = {}
-        print self.clauses
-        print self.dpll(self.clauses, self.get_symbols(self.clauses), model)
-        print model
+        return self.dpll(self.clauses, self.get_symbols(self.clauses), {})
 
     def dpll(self, clauses, symbols, model):
         # check if all clauses are true
         sat_flag = True
         for clause in clauses:
-            if self.check_satisfiability(clause, model):
+            if self.check_satisfiability(clause, model, False):
                 continue
             else:
                 sat_flag = False
                 break
         if sat_flag:
-            return True
+            return True, model
 
         # check if a clause is false
         sat_flag = True
         for clause in clauses:
-            sat_check = self.check_satisfiability(clause, model, empty_symbol_check=True)
+            sat_check = self.check_satisfiability(clause, model, True)
             if sat_check:
                 continue
             elif sat_check is None:
@@ -279,38 +241,56 @@ class Resolution:
                 sat_flag = False
                 break
         if not sat_flag:
-            return False
+            return False, {}
 
-        p, value = self.get_pure_symbol(symbols, clauses, model)
+        pure_symbols = self.get_pure_symbol(clauses, model)
+        if len(pure_symbols) > 0:
+            for p in pure_symbols:
+                symbols.remove(p)
+                try:
+                    symbols.remove(~p)
+                except KeyError as e:
+                    pass
+                model[p] = True
+                model[~p] = False
+            return self.dpll(clauses, symbols, model)
+
+        p = self.get_unit_clause(clauses, model)
         if p:
-            self.pure_symbol_rule_remove(clauses, p)
-            new_symbols = deepcopy(symbols)
-            new_symbols.remove(p)
-            new_model = model.copy()
-            new_model[p] = value
-            return self.dpll(clauses, new_symbols, new_model)
-        p = self.get_unit_clause(self.clauses, model)
-        if len(p) > 0:
-            for clause in p:
-                self.unit_clause_rule_remove(clauses, clause[0])
-            new_symbols = deepcopy(symbols)
-            new_model = deepcopy(model)
-            for clause in p:
-                new_symbols.remove(clause[0])
-                new_model[clause[0]] = clause[1]
-            return self.dpll(clauses, new_symbols, new_model)
-        p, new_symbols = list(symbols)[0], set(list(symbols)[1:])
-        new_model_true = deepcopy(model)
-        new_model_true[p] = True
-        p_true = self.dpll(clauses, new_symbols, new_model_true)
-        if p_true:
-            return True
-        new_model_false = deepcopy(model)
-        new_model_false[p] = False
-        p_false = self.dpll(clauses, new_symbols, new_model_false)
-        if p_false:
-            return True
-        return False
+            symbols.remove(p)
+            try:
+                symbols.remove(~p)
+            except KeyError as e:
+                pass
+            model[p] = True
+            model[~p] = False
+            return self.dpll(clauses, symbols, model)
+
+        new_symbols = deepcopy(symbols)
+        p, new_symbols_true = list(new_symbols)[0], set(list(new_symbols)[1:])
+        new_symbols_false = deepcopy(new_symbols_true)
+        try:
+            new_symbols_true.remove(~p)
+        except KeyError as e:
+            pass
+        model_true = deepcopy(model)
+        model_true[p] = True
+        model_true[~p] = False
+        res_true, model_true = self.dpll(clauses, new_symbols_true, model_true)
+        if res_true:
+            return True, model_true
+
+        model_false = deepcopy(model)
+        model_false[p] = False
+        model_false[~p] = True
+        try:
+            new_symbols_false.remove(~p)
+        except KeyError as e:
+            pass
+        res_false, model_false = self.dpll(clauses, new_symbols_false, model_false)
+        if res_false:
+            return True, model_false
+        return False, {}
 
     def walksat(self, p=0.5, max_flips=10000):
         # extract symbols
@@ -369,7 +349,21 @@ if __name__ == '__main__':
     r.get_friends_enemies(lines[1:])
     r.generate_cnf()
     # result = r.pl_resolution()
-    r.run_dpll()
+    output, final_model = r.run_dpll()
+    with open("output.txt", "w") as file_handler:
+        if output:
+            file_handler.write("yes")
+            people_tables = []
+            for p_t in final_model:
+                if p_t > 0 and final_model[p_t]:
+                    people_tables.append(p_t)
+            people_tables = sorted(people_tables)
+            for p_t in people_tables:
+                person = p_t / 1000
+                table = p_t % 1000
+                file_handler.write("\n" + str(person) + " " + str(table))
+        else:
+            file_handler.write("no")
     """
     seating = r.walksat()
     keys = seating.keys()
