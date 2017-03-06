@@ -13,12 +13,20 @@ class Resolution:
         self.clauses = []
         self.person_separator = 1000
         self.count = 0
+        self.related_people = set()
+
+    def get_related_people(self):
+        return self.related_people
 
     def get_friends_enemies(self, input_data):
         for data in input_data:
             formatted_data = data.split(" ")
             d1 = int(formatted_data[0])
             d2 = int(formatted_data[1])
+            if d1 > self.people or d2 > self.people:
+                continue
+            self.related_people.add(d1)
+            self.related_people.add(d2)
             if formatted_data[2].lower() == "f":
                 self.friends.append([d1, d2])
             elif formatted_data[2].lower() == "e":
@@ -26,14 +34,13 @@ class Resolution:
 
     def generate_cnf(self):
         # (Rule 1) CNF for all people
-        for person in xrange(1, self.people + 1):
+        for person in self.related_people:
             clauses_a = []
             for table in xrange(1, self.tables + 1):
                 clauses_a.append(
                     (person * self.person_separator) + table)  # appending tuples because we need to add it to set
-
             self.clauses.append(clauses_a)
-        for person in xrange(1, self.people + 1):
+        for person in self.related_people:
             for table in xrange(1, self.tables + 1):
                 for tablej in range(table + 1, self.tables + 1):
                     self.clauses.append([~((person * self.person_separator) + table),
@@ -320,13 +327,17 @@ class Resolution:
         return False
 
 
-def write_output_file(answer, model):
+def write_output_file(answer, model, related_people):
+    global people
     with open("output.txt", "w") as op_file_handler:
         if answer:
             op_file_handler.write("yes")
             people_tables = []
+            for i in xrange(1, int(people) + 1):
+                if i not in related_people:
+                    people_tables.append((i * 1000) + 1)
             for p_t in model:
-                if p_t > 0 and model[p_t]:
+                if p_t > 0 and model[p_t]:  # should be positive and True
                     people_tables.append(p_t)
             people_tables = sorted(people_tables)
             for p_t in people_tables:
@@ -348,7 +359,8 @@ if __name__ == '__main__':
     r.generate_cnf()
     # result = r.pl_resolution()
     output, final_model = r.run_dpll()
-    write_output_file(output, final_model)
+    related_people = r.get_related_people()
+    write_output_file(output, final_model, related_people)
     """
     seating = r.walksat()
     keys = seating.keys()
