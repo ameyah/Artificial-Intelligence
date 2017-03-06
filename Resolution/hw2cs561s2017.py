@@ -12,6 +12,7 @@ class Resolution:
         self.enemies = []
         self.clauses = []
         self.person_separator = 1000
+        self.count = 0
 
     def get_friends_enemies(self, input_data):
         for data in input_data:
@@ -27,14 +28,16 @@ class Resolution:
         # (Rule 1) CNF for all people
         for person in xrange(1, self.people + 1):
             clauses_a = []
-            unique_clauses_b = []
             for table in xrange(1, self.tables + 1):
                 clauses_a.append(
                     (person * self.person_separator) + table)  # appending tuples because we need to add it to set
+
+            self.clauses.append(clauses_a)
+        for person in xrange(1, self.people + 1):
+            for table in xrange(1, self.tables + 1):
                 for tablej in range(table + 1, self.tables + 1):
                     self.clauses.append([~((person * self.person_separator) + table),
                                          ~((person * self.person_separator) + tablej)])
-            self.clauses.append(clauses_a)
 
         # (Rule 2) CNF for friends
         """
@@ -130,40 +133,32 @@ class Resolution:
 
     @staticmethod
     def get_pure_symbol(clauses, model):
-        new_clauses = deepcopy(clauses)
+        # new_clauses = deepcopy(clauses)
         possible_pure_symbols = set()
-        temp_pure_symbols_remove_all = set()
-        for clause in new_clauses:
-            temp_pure_symbols_add = set()
-            temp_pure_symbols_remove = set()
+        for clause in clauses:
+            temp_pure_symbols = set()
+            clause_true_flag = False
             for literal in clause:
                 if literal in model:
                     if model[literal]:
-                        temp_pure_symbols_add = set()
-                        temp_pure_symbols_remove = set()
-                        break
-                elif ~literal in model:
-                    if not model[~literal]:
-                        temp_pure_symbols_add = set()
-                        temp_pure_symbols_remove = set()
+                        # temp_pure_symbols = set()
+                        clause_true_flag = True
                         break
                 else:
-                    if ~literal not in possible_pure_symbols:
-                        temp_pure_symbols_add.add(literal)
-                    else:
-                        temp_pure_symbols_remove.add(~literal)
-            possible_pure_symbols = possible_pure_symbols.union(temp_pure_symbols_add)
-            temp_pure_symbols_remove_all = temp_pure_symbols_remove_all.union(temp_pure_symbols_remove)
-        for literal in temp_pure_symbols_remove_all:
-            possible_pure_symbols.remove(literal)
+                    temp_pure_symbols.add(literal)
+            if not clause_true_flag:
+                possible_pure_symbols = possible_pure_symbols.union(temp_pure_symbols)
+
+        # send positive symbols first as per optimization given in AIMA Java code
         try:
             pure_symbols_positive = set()
             pure_symbols_negative = set()
             for literal in possible_pure_symbols:
-                if literal > 0:
-                    pure_symbols_positive.add(literal)
-                else:
-                    pure_symbols_negative.add(literal)
+                if ~literal not in possible_pure_symbols:
+                    if literal > 0:
+                        pure_symbols_positive.add(literal)
+                    else:
+                        pure_symbols_negative.add(literal)
             if len(pure_symbols_positive) > 0:
                 return list(pure_symbols_positive)
             else:
@@ -181,10 +176,6 @@ class Resolution:
             for literal in clause:
                 if literal in model:
                     if model[literal]:
-                        true_flag = True
-                        break
-                elif ~literal in model:
-                    if not model[~literal]:
                         true_flag = True
                         break
                 else:
@@ -245,12 +236,10 @@ class Resolution:
 
         pure_symbols = self.get_pure_symbol(clauses, model)
         if len(pure_symbols) > 0:
+            # print pure_symbols
             for p in pure_symbols:
                 symbols.remove(p)
-                try:
-                    symbols.remove(~p)
-                except KeyError as e:
-                    pass
+                symbols.discard(~p)
                 model[p] = True
                 model[~p] = False
             return self.dpll(clauses, symbols, model)
@@ -258,21 +247,16 @@ class Resolution:
         p = self.get_unit_clause(clauses, model)
         if p:
             symbols.remove(p)
-            try:
-                symbols.remove(~p)
-            except KeyError as e:
-                pass
+            symbols.discard(~p)
             model[p] = True
             model[~p] = False
             return self.dpll(clauses, symbols, model)
 
-        new_symbols = deepcopy(symbols)
-        p, new_symbols_true = list(new_symbols)[0], set(list(new_symbols)[1:])
+        new_symbols_true = deepcopy(symbols)
+        p = new_symbols_true.pop()
         new_symbols_false = deepcopy(new_symbols_true)
-        try:
-            new_symbols_true.remove(~p)
-        except KeyError as e:
-            pass
+
+        new_symbols_true.discard(~p)
         model_true = deepcopy(model)
         model_true[p] = True
         model_true[~p] = False
@@ -283,10 +267,7 @@ class Resolution:
         model_false = deepcopy(model)
         model_false[p] = False
         model_false[~p] = True
-        try:
-            new_symbols_false.remove(~p)
-        except KeyError as e:
-            pass
+        new_symbols_false.discard(~p)
         res_false, model_false = self.dpll(clauses, new_symbols_false, model_false)
         if res_false:
             return True, model_false
@@ -339,6 +320,23 @@ class Resolution:
         return False
 
 
+def write_output_file(answer, model):
+    with open("output.txt", "w") as op_file_handler:
+        if answer:
+            op_file_handler.write("yes")
+            people_tables = []
+            for p_t in model:
+                if p_t > 0 and model[p_t]:
+                    people_tables.append(p_t)
+            people_tables = sorted(people_tables)
+            for p_t in people_tables:
+                person = p_t / 1000
+                table = p_t % 1000
+                op_file_handler.write("\n" + str(person) + " " + str(table))
+        else:
+            op_file_handler.write("no")
+
+
 if __name__ == '__main__':
     lines = []
     with open("input.txt", "r") as file_handler:
@@ -350,20 +348,7 @@ if __name__ == '__main__':
     r.generate_cnf()
     # result = r.pl_resolution()
     output, final_model = r.run_dpll()
-    with open("output.txt", "w") as file_handler:
-        if output:
-            file_handler.write("yes")
-            people_tables = []
-            for p_t in final_model:
-                if p_t > 0 and final_model[p_t]:
-                    people_tables.append(p_t)
-            people_tables = sorted(people_tables)
-            for p_t in people_tables:
-                person = p_t / 1000
-                table = p_t % 1000
-                file_handler.write("\n" + str(person) + " " + str(table))
-        else:
-            file_handler.write("no")
+    write_output_file(output, final_model)
     """
     seating = r.walksat()
     keys = seating.keys()
