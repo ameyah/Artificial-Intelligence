@@ -1,5 +1,6 @@
 import random
 from copy import deepcopy
+import time
 
 __author__ = 'ameya'
 
@@ -350,6 +351,7 @@ def write_output_file(answer, model, related_people):
 
 if __name__ == '__main__':
     lines = []
+    start_time = time.time()
     with open("input.txt", "r") as file_handler:
         lines = file_handler.readlines()
     lines = [line.strip() for line in lines]
@@ -361,6 +363,7 @@ if __name__ == '__main__':
     output, final_model = r.run_dpll()
     related_people = r.get_related_people()
     write_output_file(output, final_model, related_people)
+    print time.time() - start_time
     """
     seating = r.walksat()
     keys = seating.keys()
