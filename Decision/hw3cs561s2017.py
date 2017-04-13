@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 __author__ = 'ameya'
 
 TYPE_SEPARATOR = "******"
@@ -12,8 +14,11 @@ class Decision:
         self.queries_meu = []
         self.cpts = {}
         self.parents = {}
+        self.variables = []
+        self.decision_nodes = []
         self.utility_parents = []
         self.utility_values = {}
+        self.possible_values = [True, False]
 
     def add_queries(self, query_type, value):
         if query_type == "p":
@@ -29,11 +34,73 @@ class Decision:
     def add_cpt(self, node, node_cpt):
         self.cpts[node] = node_cpt
 
+    def add_decision_node(self, node):
+        self.decision_nodes.append(node)
+
     def add_utility_parents(self, parents):
         self.utility_parents = parents
 
     def set_utility_values(self, values):
         self.utility_values = values
+
+    def add_variable(self, node):
+        self.variables.append(node)
+
+    def compute_p(self):
+        for p in self.queries_p:
+            if 'evidence' not in p:
+                X = p['find'][0][0]
+                XType = p['find'][0][1]
+                e = {}
+                for i in xrange(1, len(p['find'])):
+                    e[p['find'][i][0]] = p['find'][i][1]
+                print Decimal(self.enumeration_ask(X, XType, e)).quantize(Decimal("0.01"))
+            else:
+                X = p['find'][0][0]
+                XType = p['find'][0][1]
+                e = {}
+                for i in xrange(1, len(p['find'])):
+                    e[p['find'][i][0]] = p['find'][i][1]
+                for i in xrange(len(p['evidence'])):
+                    e[p['evidence'][i][0]] = p['evidence'][i][1]
+                result_numerator = self.enumeration_ask(X, XType, e)
+
+                X = p['evidence'][0][0]
+                XType = p['evidence'][0][1]
+                e = {}
+                for i in xrange(1, len(p['evidence'])):
+                    e[p['evidence'][i][0]] = p['evidence'][i][1]
+                result_denominator = self.enumeration_ask(X, XType, e)
+                print Decimal(result_numerator / result_denominator).quantize(Decimal("0.01"))
+
+
+    def calc_prob(self, node, val, e):
+        if node in self.decision_nodes:
+            return 1.0
+        cpt_key = [e[i] for i in self.parents[node]]
+        cpt_key = tuple(cpt_key)
+        return self.cpts[node][cpt_key] if val else 1 - self.cpts[node][cpt_key]
+
+    def enumeration_ask(self, X, XType, e):
+        return self.enumerate_all(self.variables, extend_dict(e, X, XType))
+
+    def enumerate_all(self, variables, e):
+        if not variables:
+            return 1.0
+        first = variables[0]
+        rest = variables[1:]
+        if first in e:
+            return self.calc_prob(first, e[first], e) * self.enumerate_all(rest, e)
+        else:
+            return sum(
+                self.calc_prob(first, possibility, e) * self.enumerate_all(rest, extend_dict(e, first, possibility)) for
+                possibility in self.possible_values)
+
+
+def extend_dict(old_dict, key, val):
+    new_dict = old_dict.copy()
+    new_dict[key] = val
+    return new_dict
 
 
 def get_query_p_eu(line_formatted):
@@ -79,12 +146,7 @@ def get_query_meu(line_formatted):
     return result_query
 
 
-if __name__ == '__main__':
-    lines = []
-    decision = Decision()
-    with open("input.txt", "r") as file_handler:
-        lines = file_handler.readlines()
-    lines = [i.strip() for i in lines]
+def process_input(lines):
     table_start_flag = False
     utility_start_flag = False
     i = 0
@@ -116,19 +178,19 @@ if __name__ == '__main__':
             cpt_2d = lines[i].split("|")
             cpt_2d = [j.strip() for j in cpt_2d]
             decision.add_parents(cpt_2d[0], list())
+            decision.add_variable(cpt_2d[0])
             if len(cpt_2d) == 2:
                 cpt_dependencies = cpt_2d[1].split(" ")
                 decision.add_parents(cpt_2d[0], cpt_dependencies)
             i += 1
             cpt = {}
-            continue_flag = False
             while i < len(lines):
                 if lines[i] == TYPE_SEPARATOR or lines[i] == TABLE_SEPARATOR:
                     if lines[i] == TABLE_SEPARATOR:
                         i += 1
-                    continue_flag = True
                     break
                 elif lines[i] == DECISION_IDENTIFIER:
+                    decision.add_decision_node(cpt_2d[0])
                     i += 1
                     if lines[i] == TABLE_SEPARATOR:
                         i += 1
@@ -151,3 +213,13 @@ if __name__ == '__main__':
                 utility_values[tuple(utility_row[1:])] = float(utility_row[0])
                 i += 1
             decision.set_utility_values(utility_values)
+
+
+if __name__ == '__main__':
+    lines = []
+    decision = Decision()
+    with open("input.txt", "r") as file_handler:
+        lines = file_handler.readlines()
+    lines = [i.strip() for i in lines]
+    process_input(lines)
+    decision.compute_p()
