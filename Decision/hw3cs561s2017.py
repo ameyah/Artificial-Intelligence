@@ -12,7 +12,7 @@ DECISION_IDENTIFIER = "decision"
 
 class Decision:
     def __init__(self):
-        self.queries_p = []
+        self.queries = []
         self.queries_eu = []
         self.queries_meu = []
         self.cpts = {}
@@ -23,14 +23,10 @@ class Decision:
         self.utility_values = {}
         self.possible_values = [True, False]
         self.cache = {}
+        self.result = []
 
-    def add_queries(self, query_type, value):
-        if query_type == "p":
-            self.queries_p.append(value)
-        elif query_type == "eu":
-            self.queries_eu.append(value)
-        elif query_type == "meu":
-            self.queries_meu.append(value)
+    def add_queries(self, value):
+        self.queries.append(value)
 
     def add_parents(self, node, parents):
         self.parents[node] = parents
@@ -50,6 +46,29 @@ class Decision:
     def add_variable(self, node):
         self.variables.append(node)
 
+    def process_queries(self):
+        for q in self.queries:
+            if q['type'] == "P":
+                self.result.append(str(Decimal(str(self.compute_probability(q))).quantize(Decimal("0.01"))))
+            elif q['type'] == "EU":
+                self.result.append(str(int(round(self.calculate_eu(q)))))
+            elif q['type'] == "MEU":
+                result = self.compute_meu(q)
+                print_result = ""
+                for permutation in result[0]:
+                    if permutation:
+                        print_result += "+ "
+                    else:
+                        print_result += "- "
+                print_result += str(int(round(result[1])))
+                self.result.append(print_result)
+
+    def print_result(self):
+        with open("output.txt", "w") as file_handler:
+            for i in xrange(len(self.result) - 1):
+                file_handler.write(self.result[i] + "\n")
+            file_handler.write(self.result[len(self.result) - 1])
+
     def calc_prob(self, node, val, e):
         if node in self.decision_nodes:
             return 1.0
@@ -63,7 +82,7 @@ class Decision:
         while True:
             next_parents = []
             for i in current_parents:
-                if i in compare:
+                if i in compare or i in variables:
                     continue
                 next_parents.extend(self.parents[i])
                 variables.append(i)
@@ -73,12 +92,15 @@ class Decision:
         return variables[::-1]
 
     def enumeration_ask(self, X, XType, e):
-        print (X, XType, e)
         variables = self.get_variables(X)
         for variable in e:
             variables.extend(self.get_variables(variable, variables))
-        print variables
-        return self.enumerate_all(variables, extend_dict(e, X, XType))
+        # print "variables" + str(variables)
+        op_variables = []
+        for variable in self.variables:
+            if variable in variables:
+                op_variables.append(variable)
+        return self.enumerate_all(op_variables, extend_dict(e, X, XType))
 
     def enumerate_all(self, variables, e):
         if not variables:
@@ -134,37 +156,70 @@ class Decision:
             result_denominator = self.enumeration_ask(X, XType, e)
             return result_numerator / result_denominator
 
-    def compute_p(self):
-        for p in self.queries_p:
-            print Decimal(self.compute_probability(p)).quantize(Decimal("0.01"))
+    def calculate_eu(self, p):
+        result_utility = 0.0
+        utility_p = {'find': [], 'evidence': p['find']}  # Init with p['find']
+        parent_truth_mapping = {}
+        if 'evidence' in p:
+            for evidence in p['evidence']:
+                utility_p['evidence'].extend([evidence])
 
-    def compute_eu(self):
-        for p in self.queries_eu:
-            result_utility = 0.0
-            utility_p = {'find': [], 'evidence': p['find']}  # Init with p['find']
-            parent_truth_mapping = {}
-            if 'evidence' in p:
-                for evidence in p['evidence']:
-                    utility_p['evidence'].extend([evidence])
-
-            for parent in self.utility_parents:
-                if [parent, True] not in utility_p['evidence'] and [parent, False] not in utility_p['evidence']:
-                    utility_p['find'].append([parent, None])
-            if len(utility_p['find']) > 0:
-                for permutation in itertools.product([True, False], repeat=len(utility_p['find'])):
-                    for i in xrange(len(utility_p['find'])):
-                        utility_p['find'][i][1] = permutation[i]
-                    result_utility += self.utility_values[permutation] * self.compute_probability(utility_p)
-                print result_utility
+        for parent in self.utility_parents:
+            if [parent, True] not in utility_p['evidence'] and [parent, False] not in utility_p['evidence']:
+                utility_p['find'].append([parent, None])
             else:
-                permutation = ()
-                for parent in self.utility_parents:
-                    for var_arr in utility_p['evidence']:
-                        if var_arr[0] == parent:
-                            utility_p['find'].append([parent, var_arr[1]])
-                            permutation += (var_arr[1],)
-                result_utility = self.utility_values[permutation] * self.compute_probability(utility_p)
-                print result_utility
+                parent_truth_mapping[parent] = None
+
+        # Fill in values in parent_truth_mapping
+        for evidence in utility_p['evidence']:
+            if evidence[0] in parent_truth_mapping:
+                parent_truth_mapping[evidence[0]] = evidence[1]
+
+        if len(utility_p['find']) > 0:
+            for permutation in itertools.product(self.possible_values, repeat=len(utility_p['find'])):
+                for i in xrange(len(utility_p['find'])):
+                    utility_p['find'][i][1] = permutation[i]
+                ordered_permutations = ()
+                j = 0
+                # TODO: Check this issue for MEU
+                for i in self.utility_parents:
+                    if i in parent_truth_mapping:
+                        ordered_permutations += (parent_truth_mapping[i],)
+                    else:
+                        ordered_permutations += (permutation[j],)
+                        j += 1
+                result_utility += self.utility_values[ordered_permutations] * self.compute_probability(utility_p)
+            return result_utility
+        else:
+            permutation = ()
+            for parent in self.utility_parents:
+                for var_arr in utility_p['evidence']:
+                    if var_arr[0] == parent:
+                        utility_p['find'].append([parent, var_arr[1]])
+                        permutation += (var_arr[1],)
+            result_utility = self.utility_values[permutation] * self.compute_probability(utility_p)
+            return result_utility
+
+    def compute_meu(self, p):
+        permutation_count = 0
+        for i in xrange(len(p['find']) - 1, -1, -1):
+            if p['find'][i][1] is None:
+                permutation_count += 1
+            else:
+                if 'evidence' not in p:
+                    p['evidence'] = []
+                p['evidence'].append(p['find'][i])
+                del p['find'][i]
+        max_eu = 0
+        max_key = None
+        for permutation in itertools.product(self.possible_values, repeat=permutation_count):
+            for i in xrange(len(p['find'])):
+                p['find'][i][1] = permutation[i]
+            eu = self.calculate_eu(deepcopy(p))
+            if eu > max_eu:
+                max_eu = eu
+                max_key = permutation
+        return [max_key, max_eu]
 
     """
     def elimination_ask(self, X, XType, e):
@@ -215,35 +270,20 @@ def extend_dict(old_dict, key, val):
     return new_dict
 
 
-def get_query_p_eu(line_formatted):
+def get_query(line_formatted, query_type):
     split_evidence = line_formatted.split("|")
     queries = split_evidence[0].split(",")
-    result_query = {'find': []}
+    result_query = {'find': [], 'type': query_type}
     for query in queries:
         query_variable_value = query.split("=")
-        if query_variable_value[1] == "+":
-            query_variable_value[1] = True
+        if len(query_variable_value) > 1:
+            if query_variable_value[1] == "+":
+                query_variable_value[1] = True
+            elif query_variable_value[1] == "-":
+                query_variable_value[1] = False
         else:
-            query_variable_value[1] = False
+            query_variable_value.append(None)
         result_query['find'].append(query_variable_value)
-    if len(split_evidence) == 2:
-        # to calculate conditional probability
-        evidence = split_evidence[1].split(",")
-        result_query['evidence'] = []
-        for e in evidence:
-            evidence_variable_value = e.split("=")
-            if evidence_variable_value[1] == "+":
-                evidence_variable_value[1] = True
-            else:
-                evidence_variable_value[1] = False
-            result_query['evidence'].append(evidence_variable_value)
-    return result_query
-
-
-def get_query_meu(line_formatted):
-    split_evidence = line_formatted.split("|")
-    queries = split_evidence[0].split(",")
-    result_query = {'find': queries}
     if len(split_evidence) == 2:
         # to calculate conditional probability
         evidence = split_evidence[1].split(",")
@@ -275,14 +315,14 @@ def process_input(lines):
             line_formatted = "".join(lines[i].split())
         if not table_start_flag and not utility_start_flag:
             if line_formatted[:2] == "P(":
-                probability = get_query_p_eu(line_formatted[2:-1])
-                decision.add_queries("p", probability)
+                probability = get_query(line_formatted[2:-1], query_type="P")
+                decision.add_queries(probability)
             elif line_formatted[:3] == "EU(":
-                expected_utility = get_query_p_eu(line_formatted[3:-1])
-                decision.add_queries("eu", expected_utility)
+                expected_utility = get_query(line_formatted[3:-1], query_type="EU")
+                decision.add_queries(expected_utility)
             elif line_formatted[:4] == "MEU(":
-                max_expected_utility = get_query_meu(line_formatted[4:-1])
-                decision.add_queries("meu", max_expected_utility)
+                max_expected_utility = get_query(line_formatted[4:-1], query_type="MEU")
+                decision.add_queries(max_expected_utility)
             i += 1
             continue
         elif table_start_flag:
@@ -328,15 +368,11 @@ def process_input(lines):
 
 
 if __name__ == '__main__':
-    start = time()
     lines = []
     decision = Decision()
     with open("input.txt", "r") as file_handler:
         lines = file_handler.readlines()
     lines = [i.strip() for i in lines]
     process_input(lines)
-    print decision.variables
-    print decision.parents
-    decision.compute_p()
-    decision.compute_eu()
-    print time() - start
+    decision.process_queries()
+    decision.print_result()
