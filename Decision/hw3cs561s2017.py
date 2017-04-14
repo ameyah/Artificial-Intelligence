@@ -1,6 +1,7 @@
 from decimal import Decimal
 from time import time
 from copy import deepcopy
+import itertools
 
 __author__ = 'ameya'
 
@@ -48,35 +49,6 @@ class Decision:
 
     def add_variable(self, node):
         self.variables.append(node)
-
-    def compute_p(self):
-        for p in self.queries_p:
-
-            if 'evidence' not in p:
-                X = p['find'][0][0]
-                XType = p['find'][0][1]
-                e = {}
-                for i in xrange(1, len(p['find'])):
-                    e[p['find'][i][0]] = p['find'][i][1]
-                print Decimal(self.enumeration_ask(X, XType, e)).quantize(Decimal("0.01"))
-            else:
-                X = p['find'][0][0]
-                XType = p['find'][0][1]
-                e = {}
-                for i in xrange(1, len(p['find'])):
-                    e[p['find'][i][0]] = p['find'][i][1]
-                for i in xrange(len(p['evidence'])):
-                    e[p['evidence'][i][0]] = p['evidence'][i][1]
-                result_numerator = self.enumeration_ask(X, XType, e)
-
-                X = p['evidence'][0][0]
-                XType = p['evidence'][0][1]
-                e = {}
-                for i in xrange(1, len(p['evidence'])):
-                    e[p['evidence'][i][0]] = p['evidence'][i][1]
-                result_denominator = self.enumeration_ask(X, XType, e)
-                print Decimal(result_numerator / result_denominator).quantize(Decimal("0.01"))
-
 
     def calc_prob(self, node, val, e):
         if node in self.decision_nodes:
@@ -135,6 +107,64 @@ class Decision:
 
             result = a
             return result
+
+    def compute_probability(self, p):
+        if 'evidence' not in p:
+            X = p['find'][0][0]
+            XType = p['find'][0][1]
+            e = {}
+            for i in xrange(1, len(p['find'])):
+                e[p['find'][i][0]] = p['find'][i][1]
+            return self.enumeration_ask(X, XType, e)
+        else:
+            X = p['find'][0][0]
+            XType = p['find'][0][1]
+            e = {}
+            for i in xrange(1, len(p['find'])):
+                e[p['find'][i][0]] = p['find'][i][1]
+            for i in xrange(len(p['evidence'])):
+                e[p['evidence'][i][0]] = p['evidence'][i][1]
+            result_numerator = self.enumeration_ask(X, XType, e)
+
+            X = p['evidence'][0][0]
+            XType = p['evidence'][0][1]
+            e = {}
+            for i in xrange(1, len(p['evidence'])):
+                e[p['evidence'][i][0]] = p['evidence'][i][1]
+            result_denominator = self.enumeration_ask(X, XType, e)
+            return result_numerator / result_denominator
+
+    def compute_p(self):
+        for p in self.queries_p:
+            print Decimal(self.compute_probability(p)).quantize(Decimal("0.01"))
+
+    def compute_eu(self):
+        for p in self.queries_eu:
+            result_utility = 0.0
+            utility_p = {'find': [], 'evidence': p['find']}  # Init with p['find']
+            parent_truth_mapping = {}
+            if 'evidence' in p:
+                for evidence in p['evidence']:
+                    utility_p['evidence'].extend([evidence])
+
+            for parent in self.utility_parents:
+                if [parent, True] not in utility_p['evidence'] and [parent, False] not in utility_p['evidence']:
+                    utility_p['find'].append([parent, None])
+            if len(utility_p['find']) > 0:
+                for permutation in itertools.product([True, False], repeat=len(utility_p['find'])):
+                    for i in xrange(len(utility_p['find'])):
+                        utility_p['find'][i][1] = permutation[i]
+                    result_utility += self.utility_values[permutation] * self.compute_probability(utility_p)
+                print result_utility
+            else:
+                permutation = ()
+                for parent in self.utility_parents:
+                    for var_arr in utility_p['evidence']:
+                        if var_arr[0] == parent:
+                            utility_p['find'].append([parent, var_arr[1]])
+                            permutation += (var_arr[1],)
+                result_utility = self.utility_values[permutation] * self.compute_probability(utility_p)
+                print result_utility
 
     """
     def elimination_ask(self, X, XType, e):
@@ -308,4 +338,5 @@ if __name__ == '__main__':
     print decision.variables
     print decision.parents
     decision.compute_p()
+    decision.compute_eu()
     print time() - start
