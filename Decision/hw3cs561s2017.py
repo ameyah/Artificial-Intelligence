@@ -46,6 +46,25 @@ class Decision:
     def add_variable(self, node):
         self.variables.append(node)
 
+    def generate_cache_key(self, var, rest, e):
+        parents_values = ()
+        for parent in self.parents[var]:
+            parents_values += ((parent, e[parent],),)
+        var_index = self.variables.index(var)
+        topological_order = ()
+        for i in rest:
+            for parent in self.parents[i]:
+                if self.variables.index(parent) < var_index:
+                    topological_order += ((parent, e[parent],),)
+        """
+        if var in e:
+            cache_key = (var, e[var], parents_values,)
+        else:
+            cache_key = (var, None, parents_values,)
+        """
+        cache_key = (var, topological_order, parents_values,)
+        return cache_key
+
     def process_queries(self):
         for q in self.queries:
             if q['type'] == "P":
@@ -92,6 +111,9 @@ class Decision:
         return variables[::-1]
 
     def enumeration_ask(self, X, XType, e):
+
+        self.cache = {}
+
         variables = self.get_variables(X)
         for variable in e:
             variables.extend(self.get_variables(variable, variables))
@@ -107,27 +129,27 @@ class Decision:
             return 1.0
         first = variables[0]
         rest = variables[1:]
+        cache_key = self.generate_cache_key(first, rest, e)
+        if cache_key in self.cache:
+            # print cache_key
+            return self.cache[cache_key]
         if first in e:
             prob = self.calc_prob(first, e[first], e)
             if prob == 0.0:
-                # self.cache[str(variables) + str(e)] = 0.0
                 return 0.0
             result = prob * self.enumerate_all(rest, e)
-            # print first + str(e[first]) + str(e) + " " + str(result)
-            # self.cache[str(variables) + str(e)] = result
             return result
         else:
             a = 0
             for possibility in self.possible_values:
                 prob = self.calc_prob(first, possibility, e)
-                if prob == 0.0:
-                    # self.cache[str(variables) + str(e)] = 0.0
-                    continue
-                else:
-                    a += prob * self.enumerate_all(rest, extend_dict(e, first, possibility))
-                # print first + str(possibility) + str(e) + " " + str(a)
+                rest_result = self.enumerate_all(rest, extend_dict(e, first, possibility))
+                a += prob * rest_result
 
             result = a
+            x = self.generate_cache_key(first, rest, e)
+            self.cache[x] = result
+            # print self.cache
             return result
 
     def compute_probability(self, p):
@@ -139,6 +161,7 @@ class Decision:
                 e[p['find'][i][0]] = p['find'][i][1]
             return self.enumeration_ask(X, XType, e)
         else:
+
             X = p['find'][0][0]
             XType = p['find'][0][1]
             e = {}
@@ -154,6 +177,7 @@ class Decision:
             for i in xrange(1, len(p['evidence'])):
                 e[p['evidence'][i][0]] = p['evidence'][i][1]
             result_denominator = self.enumeration_ask(X, XType, e)
+
             return result_numerator / result_denominator
 
     def calculate_eu(self, p):
