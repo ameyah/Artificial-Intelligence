@@ -1,4 +1,6 @@
 from decimal import Decimal
+from time import time
+from copy import deepcopy
 
 __author__ = 'ameya'
 
@@ -19,6 +21,7 @@ class Decision:
         self.utility_parents = []
         self.utility_values = {}
         self.possible_values = [True, False]
+        self.cache = {}
 
     def add_queries(self, query_type, value):
         if query_type == "p":
@@ -48,6 +51,7 @@ class Decision:
 
     def compute_p(self):
         for p in self.queries_p:
+
             if 'evidence' not in p:
                 X = p['find'][0][0]
                 XType = p['find'][0][1]
@@ -81,8 +85,28 @@ class Decision:
         cpt_key = tuple(cpt_key)
         return self.cpts[node][cpt_key] if val else 1 - self.cpts[node][cpt_key]
 
+    def get_variables(self, X, compare=list()):
+        variables = []
+        current_parents = [X]
+        while True:
+            next_parents = []
+            for i in current_parents:
+                if i in compare:
+                    continue
+                next_parents.extend(self.parents[i])
+                variables.append(i)
+            if not next_parents:
+                break
+            current_parents = deepcopy(next_parents)
+        return variables[::-1]
+
     def enumeration_ask(self, X, XType, e):
-        return self.enumerate_all(self.variables, extend_dict(e, X, XType))
+        print (X, XType, e)
+        variables = self.get_variables(X)
+        for variable in e:
+            variables.extend(self.get_variables(variable, variables))
+        print variables
+        return self.enumerate_all(variables, extend_dict(e, X, XType))
 
     def enumerate_all(self, variables, e):
         if not variables:
@@ -90,11 +114,69 @@ class Decision:
         first = variables[0]
         rest = variables[1:]
         if first in e:
-            return self.calc_prob(first, e[first], e) * self.enumerate_all(rest, e)
+            prob = self.calc_prob(first, e[first], e)
+            if prob == 0.0:
+                # self.cache[str(variables) + str(e)] = 0.0
+                return 0.0
+            result = prob * self.enumerate_all(rest, e)
+            # print first + str(e[first]) + str(e) + " " + str(result)
+            # self.cache[str(variables) + str(e)] = result
+            return result
         else:
-            return sum(
-                self.calc_prob(first, possibility, e) * self.enumerate_all(rest, extend_dict(e, first, possibility)) for
-                possibility in self.possible_values)
+            a = 0
+            for possibility in self.possible_values:
+                prob = self.calc_prob(first, possibility, e)
+                if prob == 0.0:
+                    # self.cache[str(variables) + str(e)] = 0.0
+                    continue
+                else:
+                    a += prob * self.enumerate_all(rest, extend_dict(e, first, possibility))
+                # print first + str(possibility) + str(e) + " " + str(a)
+
+            result = a
+            return result
+
+    """
+    def elimination_ask(self, X, XType, e):
+        factors = []
+        for var in reversed(self.variables):
+            factors.append(self.make_factor(var, e))
+            if var != X and var not in e:
+                factors = self.sum_out(var, factors)
+        return pointwise_product(factors).normalize()
+
+    def sum_out(self, var, factors):
+        result, var_factors = [], []
+        for f in factors:
+            (var_factors if var in f.variables else result).append(f)
+        result.append(pointwise_product(var_factors).sum_out(var, factors))
+        return result
+
+    def make_factor(self, var, e):
+        variables = [X for X in [var] + self.parents[var] if X not in e]
+        cpt = {self.event_values(e1, variables): self.calc_prob(var, e1[var], e1)
+               for e1 in self.all_events(variables, e)}
+        return Factor(variables, cpt)
+
+    def all_events(self, variables, e):
+        if not variables:
+            yield e
+        else:
+            X, rest = variables[0], variables[1:]
+            for e1 in self.all_events(rest, e):
+                for x in self.possible_values:
+                    yield extend_dict(e1, X, x)
+
+    def event_values(self, event, variables):
+        if isinstance(event, tuple) and len(event) == len(variables):
+            return event
+        else:
+            return tuple([event[var] for var in variables])
+    """
+
+
+def pointwise_product(factors):
+    return reduce(lambda f, g: f.pointwise_product(g), factors)
 
 
 def extend_dict(old_dict, key, val):
@@ -216,10 +298,14 @@ def process_input(lines):
 
 
 if __name__ == '__main__':
+    start = time()
     lines = []
     decision = Decision()
     with open("input.txt", "r") as file_handler:
         lines = file_handler.readlines()
     lines = [i.strip() for i in lines]
     process_input(lines)
+    print decision.variables
+    print decision.parents
     decision.compute_p()
+    print time() - start
