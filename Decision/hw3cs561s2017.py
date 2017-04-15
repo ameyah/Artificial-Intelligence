@@ -205,7 +205,6 @@ class Decision:
                     utility_p['find'][i][1] = permutation[i]
                 ordered_permutations = ()
                 j = 0
-                # TODO: Check this issue for MEU
                 for i in self.utility_parents:
                     if i in parent_truth_mapping:
                         ordered_permutations += (parent_truth_mapping[i],)
@@ -226,6 +225,8 @@ class Decision:
 
     def compute_meu(self, p):
         permutation_count = 0
+        input_find = deepcopy(p['find'])
+        result_fixed_values = {}
         for i in xrange(len(p['find']) - 1, -1, -1):
             if p['find'][i][1] is None:
                 permutation_count += 1
@@ -233,16 +234,24 @@ class Decision:
                 if 'evidence' not in p:
                     p['evidence'] = []
                 p['evidence'].append(p['find'][i])
+                result_fixed_values[p['find'][i][0]] = i
                 del p['find'][i]
         max_eu = 0
-        max_key = None
+        max_key = ()
         for permutation in itertools.product(self.possible_values, repeat=permutation_count):
             for i in xrange(len(p['find'])):
                 p['find'][i][1] = permutation[i]
             eu = self.calculate_eu(deepcopy(p))
             if eu > max_eu:
                 max_eu = eu
-                max_key = permutation
+                max_key = ()
+                i = 0
+                for input_var in input_find:
+                    if input_var[1] is None:
+                        max_key += (permutation[i],)
+                        i += 1
+                    else:
+                        max_key += (input_var[1],)
         return [max_key, max_eu]
 
     """
